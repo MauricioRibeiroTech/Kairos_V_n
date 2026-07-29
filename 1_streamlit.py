@@ -1,11 +1,10 @@
 import os
-import io
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 
 # --------------------------------------------
-# 1. CONFIGURAÇÃO DA PÁGINA & ESTILO CSS
+# 1. CONFIGURAÇÃO DA PÁGINA & ESTILO DARK THEME (CSS)
 # --------------------------------------------
 st.set_page_config(
     page_title="Dashboard Educacional - CTV",
@@ -14,178 +13,141 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Customização CSS para um visual moderno e limpo
+# Injeção de CSS para um Dark Theme de alta precisão
 st.markdown("""
 <style>
-    /* Fundo suave para o aplicativo */
+    /* Estilização Geral do Dark Mode */
     .stApp {
-        background-color: #f8f9fa;
+        background-color: #0d1117;
+        color: #c9d1d9;
     }
     
-    /* Estilização dos Cards de Métricas */
-    [data-testid="stMetricValue"] {
-        font-size: 1.8rem !important;
-        font-weight: 700 !important;
-        color: #1e293b;
+    /* Barra Lateral (Sidebar) Escura */
+    section[data-testid="stSidebar"] {
+        background-color: #161b22 !important;
+        border-right: 1px solid #30363d;
     }
+    
+    /* Cards de Métricas Neon/Dark */
+    div[data-testid="stMetric"] {
+        background-color: #161b22 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 10px !important;
+        padding: 15px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+    }
+    
+    [data-testid="stMetricValue"] {
+        font-size: 2rem !important;
+        font-weight: 800 !important;
+        color: #58a6ff !important;
+    }
+    
     [data-testid="stMetricLabel"] {
         font-size: 0.9rem !important;
-        color: #64748b !important;
+        color: #8b949e !important;
         font-weight: 600 !important;
     }
     
-    /* Headers com tipografia elegante */
+    /* Títulos e Tipografia */
     h1 {
-        color: #0f172a;
+        color: #f0f6fc !important;
         font-weight: 800 !important;
         letter-spacing: -0.5px;
     }
     h2, h3 {
-        color: #1e293b;
+        color: #58a6ff !important;
         font-weight: 700 !important;
     }
     
-    /* Separador fino estilizado */
+    /* Divisores */
     hr {
-        margin: 1rem 0;
-        border-color: #e2e8f0;
-    }
-    
-    /* Ajustes na sidebar */
-    section[data-testid="stSidebar"] {
-        background-color: #ffffff;
-        border-right: 1px solid #e2e8f0;
+        border-color: #30363d !important;
+        margin: 1.2rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
 # --------------------------------------------
-# 2. FUNÇÃO DE CARREGAMENTO E TRATAMENTO
+# 2. CARREGAMENTO DIRETO DOS ARQUIVOS (SEM PEDIR CSV)
 # --------------------------------------------
 @st.cache_data(ttl=3600)
-def carregar_dados():
+def carregar_dados_direto():
     """
-    Carrega os dados dos arquivos CSV locais ('estudantes_manha.csv' e 'estudantes_tarde.csv')
-    ou de um CSV único ('dados_alunos.csv'). Trata nulos, mapeia colunas e identifica laudos.
+    Busca e lê diretamente os arquivos no diretório do projeto no servidor/GitHub.
     """
-    df_manha = pd.DataFrame()
-    df_tarde = pd.DataFrame()
-    
-    # Tentativa 1: Arquivos CSV separados por turno
-    if os.path.exists("estudantes_manha.csv") and os.path.exists("estudantes_tarde.csv"):
-        df_manha = pd.read_csv("estudantes_manha.csv")
-        df_tarde = pd.read_csv("estudantes_tarde.csv")
-    # Tentativa 2: Arquivo CSV único consolidado
-    elif os.path.exists("dados_alunos.csv"):
+    df_m, df_t = pd.DataFrame(), pd.DataFrame()
+
+    # Leitura direta das tabelas em CSV
+    if os.path.exists("estudantes_manha.csv"):
+        df_m = pd.read_csv("estudantes_manha.csv")
+    if os.path.exists("estudantes_tarde.csv"):
+        df_t = pd.read_csv("estudantes_tarde.csv")
+        
+    # Caso os dados venham em um único CSV consolidado
+    if df_m.empty and df_t.empty and os.path.exists("dados_alunos.csv"):
         df_unico = pd.read_csv("dados_alunos.csv")
         if 'Turno' in df_unico.columns:
-            df_manha = df_unico[df_unico['Turno'] == 'Manhã'].copy()
-            df_tarde = df_unico[df_unico['Turno'] == 'Tarde'].copy()
+            df_m = df_unico[df_unico['Turno'] == 'Manhã'].copy()
+            df_t = df_unico[df_unico['Turno'] == 'Tarde'].copy()
         else:
-            df_manha = df_unico.copy()
+            df_m = df_unico.copy()
 
     def tratar_tabela(df, turno):
         if df.empty:
             return pd.DataFrame()
 
-        # Mapeamento dinâmico de colunas
         mapeamento = {
-            'COL 1': 'Nome',
-            'COL 2': 'Curso',
-            'COL 3': 'Serie',
-            'COL 4': 'Turma',
-            'COL 5': 'Deficiencia',
-            'COL 6': 'Especificacao',
-            'COL 7': 'Situacao'
+            'COL 1': 'Nome', 'COL 2': 'Curso', 'COL 3': 'Serie',
+            'COL 4': 'Turma', 'COL 5': 'Deficiencia', 'COL 6': 'Especificacao',
+            'COL 7': 'Situacao', 'COL 8': 'Observacao'
         }
-        if turno == 'Manhã':
-            mapeamento['COL 8'] = 'Observacao'
-
-        # Renomeia colunas se a estrutura for do tipo SQL (COL 1, COL 2...)
         colunas_existentes = {k: v for k, v in mapeamento.items() if k in df.columns}
         df = df.rename(columns=colunas_existentes)
 
-        # Se já tiver nomes padronizados, garante que existem
-        if 'Seriacao' in df.columns and 'Serie' not in df.columns:
-            df = df.rename(columns={'Seriacao': 'Serie'})
-        if 'Especificação' in df.columns and 'Especificacao' not in df.columns:
-            df = df.rename(columns={'Especificação': 'Especificacao'})
-        if 'Situação' in df.columns and 'Situacao' not in df.columns:
-            df = df.rename(columns={'Situação': 'Situacao'})
+        # Padronização secundária de colunas
+        df = df.rename(columns={'Seriacao': 'Serie', 'Especificação': 'Especificacao', 'Situação': 'Situacao'})
 
-        # Remoção de cabeçalhos acidentais inseridos como linhas
-        cabecalhos_invalidos = ['Nome', 'ESTUDANTES  MANHÃ', 'ESTUDANTES TARDE', ' \\', '']
+        # Remoção de cabeçalhos das tabelas lidas como linha
+        cabecalhos = ['Nome', 'ESTUDANTES  MANHÃ', 'ESTUDANTES TARDE', ' \\', '']
         if 'Nome' in df.columns:
-            df = df[~df['Nome'].isin(cabecalhos_invalidos)]
+            df = df[~df['Nome'].isin(cabecalhos)]
             df = df[df['Nome'].notna()]
 
-        # Limpeza de espaços em branco adicionais
+        # Limpeza de espaços em branco nas strings
         for col in df.select_dtypes(include='object').columns:
             df[col] = df[col].astype(str).str.strip()
 
         df['Turno'] = turno
 
-        # Identificação de Laudo
-        sem_laudo_valores = ['S/L', 'Sem laudo', '', 'nan', 'None']
+        # Regra de Laudo
+        sem_laudo = ['S/L', 'Sem laudo', '', 'nan', 'None']
         if 'Especificacao' in df.columns:
-            df['Com_Laudo'] = ~df['Especificacao'].isin(sem_laudo_valores) & df['Especificacao'].notna()
+            df['Com_Laudo'] = ~df['Especificacao'].isin(sem_laudo) & df['Especificacao'].notna()
         else:
             df['Com_Laudo'] = False
 
         return df
 
-    df_m = tratar_tabela(df_manha, 'Manhã')
-    df_t = tratar_tabela(df_tarde, 'Tarde')
+    df_m = tratar_tabela(df_m, 'Manhã')
+    df_t = tratar_tabela(df_t, 'Tarde')
 
     df_total = pd.concat([df_m, df_t], ignore_index=True) if not df_m.empty or not df_t.empty else pd.DataFrame()
     return df_total, df_m, df_t
 
 
-# --------------------------------------------
-# 3. CARREGAMENTO & FALLBACK DE UPLOAD
-# --------------------------------------------
-df_total, df_manha, df_tarde = carregar_dados()
-
-# Interface de Contingência/Upload caso não encontre os CSVs no repositório
-if df_total.empty:
-    st.info("📂 **Nenhum arquivo CSV detectado na raiz do repositório.**")
-    st.markdown("Para visualizar a aplicação, faça o upload dos seus arquivos CSV abaixo:")
-    
-    col_up1, col_up2 = st.columns(2)
-    with col_up1:
-        up_m = st.file_uploader("Upload: Estudantes Manhã (CSV)", type=['csv'], key="up_m")
-    with col_up2:
-        up_t = st.file_uploader("Upload: Estudantes Tarde (CSV)", type=['csv'], key="up_t")
-
-    if up_m or up_t:
-        df_m_raw = pd.read_csv(up_m) if up_m else pd.DataFrame()
-        df_t_raw = pd.read_csv(up_t) if up_t else pd.DataFrame()
-        
-        # Reprocessa os arquivos enviados
-        def tratar_upload(df, turno):
-            if df.empty:
-                return pd.DataFrame()
-            df['Turno'] = turno
-            if 'Especificacao' in df.columns:
-                df['Com_Laudo'] = ~df['Especificacao'].isin(['S/L', 'Sem laudo', '']) & df['Especificacao'].notna()
-            return df
-
-        df_manha = tratar_upload(df_m_raw, 'Manhã')
-        df_tarde = tratar_upload(df_t_raw, 'Tarde')
-        df_total = pd.concat([df_manha, df_tarde], ignore_index=True)
-    else:
-        st.stop()
+# Executa o carregamento automático dos dados no servidor
+df_total, df_manha, df_tarde = carregar_dados_direto()
 
 
 # --------------------------------------------
-# 4. BARRA LATERAL (FILTROS INTERATIVOS)
+# 3. BARRA LATERAL (FILTROS)
 # --------------------------------------------
-st.sidebar.title("⚙️ Painel de Controle")
-st.sidebar.markdown("Filtre as informações em tempo real:")
+st.sidebar.title("⚙️ Filtros do Sistema")
 
 # Filtro por Turno
-turno_selecionado = st.sidebar.radio("Selecione o Turno", ['Todos', 'Manhã', 'Tarde'], index=0)
+turno_selecionado = st.sidebar.radio("Turno", ['Todos', 'Manhã', 'Tarde'], index=0)
 
 if turno_selecionado == 'Manhã':
     df_filtrado = df_manha.copy()
@@ -195,56 +157,53 @@ else:
     df_filtrado = df_total.copy()
 
 # Busca textual por Nome
-busca_nome = st.sidebar.text_input("🔍 Buscar por Nome do Aluno", "")
+busca_nome = st.sidebar.text_input("🔍 Pesquisar Aluno", "")
 if busca_nome:
     df_filtrado = df_filtrado[df_filtrado['Nome'].str.contains(busca_nome, case=False, na=False)]
 
-# Filtro por Série
-series_opcoes = sorted([s for s in df_filtrado['Serie'].dropna().unique() if s != 'nan'])
-serie_sel = st.sidebar.multiselect("Série", series_opcoes, default=series_opcoes)
+# Filtros Dinâmicos
+if not df_filtrado.empty:
+    series_opcoes = sorted([s for s in df_filtrado['Serie'].dropna().unique() if s != 'nan'])
+    serie_sel = st.sidebar.multiselect("Série", series_opcoes, default=series_opcoes)
 
-# Filtro por Deficiência
-defic_opcoes = sorted([d for d in df_filtrado['Deficiencia'].dropna().unique() if d != 'nan'])
-defic_sel = st.sidebar.multiselect("Deficiência", defic_opcoes, default=defic_opcoes)
+    defic_opcoes = sorted([d for d in df_filtrado['Deficiencia'].dropna().unique() if d != 'nan'])
+    defic_sel = st.sidebar.multiselect("Deficiência", defic_opcoes, default=defic_opcoes)
 
-# Filtro por Situação
-sit_opcoes = sorted([s for s in df_filtrado['Situacao'].dropna().unique() if s != 'nan'])
-sit_sel = st.sidebar.multiselect("Situação do Aluno", sit_opcoes, default=sit_opcoes)
+    sit_opcoes = sorted([s for s in df_filtrado['Situacao'].dropna().unique() if s != 'nan'])
+    sit_sel = st.sidebar.multiselect("Situação", sit_opcoes, default=sit_opcoes)
 
-# Checkbox Laudo
-apenas_laudo = st.sidebar.checkbox("Exibir apenas alunos com Laudo", value=True)
+    apenas_laudo = st.sidebar.checkbox("Apenas Alunos com Laudo", value=True)
 
-# Aplicação dos Filtros Selecionados
-if serie_sel:
-    df_filtrado = df_filtrado[df_filtrado['Serie'].isin(serie_sel)]
-if defic_sel:
-    df_filtrado = df_filtrado[df_filtrado['Deficiencia'].isin(defic_sel)]
-if sit_sel:
-    df_filtrado = df_filtrado[df_filtrado['Situacao'].isin(sit_sel)]
-if apenas_laudo:
-    df_filtrado = df_filtrado[df_filtrado['Com_Laudo'] == True]
+    if serie_sel:
+        df_filtrado = df_filtrado[df_filtrado['Serie'].isin(serie_sel)]
+    if defic_sel:
+        df_filtrado = df_filtrado[df_filtrado['Deficiencia'].isin(defic_sel)]
+    if sit_sel:
+        df_filtrado = df_filtrado[df_filtrado['Situacao'].isin(sit_sel)]
+    if apenas_laudo:
+        df_filtrado = df_filtrado[df_filtrado['Com_Laudo'] == True]
 
 
 # --------------------------------------------
-# 5. CABEÇALHO & CARDS DE MÉTRICAS
+# 4. PAINEL PRINCIPAL & MÉTRICAS
 # --------------------------------------------
 st.title("🎓 Painel Educacional de Inclusão - CTV")
-st.markdown("Acompanhamento analítico dos estudantes com laudos e necessidades específicas de aprendizagem.")
+st.markdown("Monitoramento estratégico e inclusivo dos estudantes em tempo real.")
 st.markdown("---")
 
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Total de Alunos (Filtro)", len(df_filtrado))
-m2.metric("Com Laudo Técnico", len(df_filtrado[df_filtrado['Com_Laudo'] == True]))
-m3.metric("Turno Manhã", len(df_filtrado[df_filtrado['Turno'] == 'Manhã']))
-m4.metric("Turno Tarde", len(df_filtrado[df_filtrado['Turno'] == 'Tarde']))
+m1.metric("Total Exibido", len(df_filtrado))
+m2.metric("Com Laudo", len(df_filtrado[df_filtrado['Com_Laudo'] == True]) if 'Com_Laudo' in df_filtrado.columns else 0)
+m3.metric("Manhã", len(df_filtrado[df_filtrado['Turno'] == 'Manhã']) if 'Turno' in df_filtrado.columns else 0)
+m4.metric("Tarde", len(df_filtrado[df_filtrado['Turno'] == 'Tarde']) if 'Turno' in df_filtrado.columns else 0)
 
 st.markdown("---")
 
 
 # --------------------------------------------
-# 6. GRÁFICOS ANALÍTICOS (PLOTLY INTERATIVO)
+# 5. GRÁFICOS ANALÍTICOS (DARK MODE PLOTLY)
 # --------------------------------------------
-st.subheader("📊 Visualizações e Diagnósticos")
+st.subheader("📊 Diagnóstico e Distribuições")
 
 if not df_filtrado.empty:
     g1, g2 = st.columns(2)
@@ -258,12 +217,13 @@ if not df_filtrado.empty:
                 x='Alunos',
                 y='Deficiência',
                 orientation='h',
-                title='<b>Distribuição por Tipo de Deficiência</b>',
+                title='<b>Deficiências Identificadas</b>',
                 text='Alunos',
                 color='Alunos',
-                color_continuous_scale='Viridis'
+                color_continuous_scale='teal',
+                template='plotly_dark'
             )
-            fig_def.update_layout(yaxis={'categoryorder':'total ascending'}, showlegend=False, margin=dict(l=20, r=20, t=40, b=20))
+            fig_def.update_layout(yaxis={'categoryorder':'total ascending'}, showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_def, use_container_width=True)
 
     with g2:
@@ -274,15 +234,16 @@ if not df_filtrado.empty:
                 df_sit,
                 names='Situação',
                 values='Alunos',
-                title='<b>Situação do Atendimento (SRM/Atendimento)</b>',
-                hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.Pastel
+                title='<b>Situação do Atendimento (SRM)</b>',
+                hole=0.45,
+                color_discrete_sequence=px.colors.qualitative.Dark24,
+                template='plotly_dark'
             )
             fig_sit.update_traces(textinfo='percent+value')
-            fig_sit.update_layout(margin=dict(l=20, r=20, t=40, b=20))
+            fig_sit.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_sit, use_container_width=True)
 
-    # Gráfico de Distribuição por Série
+    # Distribuição por Série
     if 'Serie' in df_filtrado.columns and not df_filtrado['Serie'].empty:
         df_serie = df_filtrado['Serie'].value_counts().reset_index()
         df_serie.columns = ['Série', 'Alunos']
@@ -290,24 +251,25 @@ if not df_filtrado.empty:
             df_serie,
             x='Série',
             y='Alunos',
-            title='<b>Volume de Alunos por Série</b>',
+            title='<b>Quantidade de Estudantes por Série</b>',
             text='Alunos',
-            color_discrete_sequence=['#2563eb']
+            color_discrete_sequence=['#58a6ff'],
+            template='plotly_dark'
         )
         fig_serie.update_traces(textposition='outside')
-        fig_serie.update_layout(margin=dict(l=20, r=20, t=40, b=20))
+        fig_serie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_serie, use_container_width=True)
 
 else:
-    st.warning("Nenhum dado encontrado para os filtros selecionados.")
+    st.warning("⚠️ Nenhum registro localizado com os filtros selecionados.")
 
 st.markdown("---")
 
 
 # --------------------------------------------
-# 7. TABELA DE DADOS INTERATIVA
+# 6. TABELA DE DADOS & DOWNLOAD
 # --------------------------------------------
-st.subheader("📋 Listagem Detalhada de Alunos")
+st.subheader("📋 Tabela de Registros")
 
 if not df_filtrado.empty:
     cols_exibir = [c for c in ['Nome', 'Curso', 'Serie', 'Turma', 'Deficiencia', 'Especificacao', 'Situacao', 'Turno', 'Observacao'] if c in df_filtrado.columns]
@@ -317,27 +279,6 @@ if not df_filtrado.empty:
         use_container_width=True,
         hide_index=True
     )
-else:
-    st.info("Ajuste os filtros na barra lateral para visualizar os dados.")
-
-
-# --------------------------------------------
-# 8. EXPORTAÇÃO DE DADOS & RODAPÉ
-# --------------------------------------------
-st.sidebar.markdown("---")
-st.sidebar.subheader("📥 Exportar Relatório")
-
-if not df_filtrado.empty:
-    cols_exp = [c for c in ['Nome', 'Curso', 'Serie', 'Turma', 'Deficiencia', 'Especificacao', 'Situacao', 'Turno', 'Observacao'] if c in df_filtrado.columns]
-    buffer = io.BytesIO()
-    df_filtrado[cols_exp].to_csv(buffer, index=False, encoding='utf-8-sig')
-    
-    st.sidebar.download_button(
-        label="📄 Baixar Relatório (CSV)",
-        data=buffer.getvalue(),
-        file_name="relatorio_alunos_laudo.csv",
-        mime="text/csv"
-    )
 
 st.markdown("---")
-st.caption("🚀 Dashboard otimizado para alta performance via dados CSV | Atualizado para Streamlit Cloud")
+st.caption("⚡ Aplicação em Dark Theme alimentada automaticamente via arquivos de dados locais no GitHub.")
